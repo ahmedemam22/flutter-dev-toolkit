@@ -35,12 +35,19 @@ fbipa
 
 ```bash
 git clone https://github.com/ahmedemam22/flutter-dev-toolkit.git ~/flutter-dev-toolkit
-cd ~/flutter-dev-toolkit
-chmod +x install.sh tool/dev.sh
+cd ~/flutter-dev-toolkit/macos
+chmod +x install.sh ../tool/dev.sh
 ./install.sh
 source ~/.zshrc
 fhelp
 ```
+
+> **Tip:** `install.sh` copies `zsh_flutter` to `~/.zsh_flutter`. If you'd rather have `git pull` instantly update your helpers without reinstalling, swap the copy for a symlink:
+> ```bash
+> rm ~/.zsh_flutter
+> ln -s ~/flutter-dev-toolkit/macos/zsh_flutter ~/.zsh_flutter
+> rflutter
+> ```
 
 ### Windows (PowerShell)
 
@@ -100,7 +107,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 | Alias | Does |
 |---|---|
 | `fcp` / `frefresh` | clean + pub get (no build) |
-| `fnuke` | wipe all caches (Pods/DerivedData on macOS, `.dart_tool`/`build` on both) and reinstall |
+| `fnuke` | wipe caches + reinstall (`ios/Pods` + `ios/.symlinks` + DerivedData on macOS; `.dart_tool` + `build/` on both) |
 | `fopen apk` / `fopen ipa` / `fopen aab` | open artifact folder in Finder / Explorer |
 | `finfo` | environment sanity check |
 | `rflutter` | reload config after editing the script |
@@ -199,9 +206,18 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```bash
 cd ~/flutter-dev-toolkit
 git pull
-rflutter     # macOS — reloads without restarting shell
-. $PROFILE   # Windows
 ```
+
+On **Windows**, `$PROFILE` dot-sources the file in the repo directly, so changes are live after:
+
+```powershell
+. $PROFILE
+```
+
+On **macOS**, behavior depends on how you installed:
+
+- **Symlink** (recommended for contributors) — just run `rflutter`.
+- **Copy** (default from `./install.sh`) — re-run `./macos/install.sh` to refresh the copy, then `source ~/.zshrc`.
 
 ## Repo layout
 
@@ -210,14 +226,15 @@ flutter-dev-toolkit/
 ├── README.md
 ├── LICENSE               MIT
 ├── .gitignore
-├── install.sh            macOS/Linux installer
-├── zsh_flutter           macOS/Linux shell helpers
+├── macos/
+│   ├── zsh_flutter       macOS/Linux shell helpers
+│   └── install.sh        macOS/Linux installer
 ├── windows/
 │   ├── flutter.ps1       Windows PowerShell helpers
 │   └── install.ps1       Windows installer
 └── tool/
-    ├── dev.sh            cross-platform bash build script
-    └── dev.ps1           Windows PowerShell build script
+    ├── dev.sh            cross-platform bash build script (drop into Flutter projects)
+    └── dev.ps1           Windows PowerShell build script (drop into Flutter projects)
 ```
 
 ## Contributing
