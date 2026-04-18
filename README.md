@@ -9,7 +9,7 @@ flutter clean
 flutter pub get
 rm -rf ios/.symlinks ios/Pods
 cd ios && pod install --repo-update && cd ..
-flutter build ipa --release -t lib/main_gcp.dart
+flutter build ipa --release -t lib/main.dart
 ```
 
 Into this:
@@ -118,9 +118,9 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```bash
 fbapk                               # debug APK
 fbapk --release --flavor prod       # release APK with flavor
-fbipa                               # release IPA (macOS), uses lib/main_gcp.dart
+fbipa                               # release IPA (macOS), uses lib/main.dart
 fbipa lib/main_staging.dart         # custom entrypoint
-fbipa lib/main_gcp.dart --no-codesign
+fbipa lib/main.dart --no-codesign
 
 fgen                                # one-shot code generation
 fbrw                                # watch mode — auto-regen on save
@@ -142,7 +142,7 @@ Then everyone runs:
 
 ```bash
 ./tool/dev.sh apk --release           # macOS / Linux
-./tool/dev.sh ipa lib/main_gcp.dart   # macOS only
+./tool/dev.sh ipa lib/main.dart   # macOS only
 ./tool/dev.sh gen
 ./tool/dev.sh refresh
 ./tool/dev.sh nuke

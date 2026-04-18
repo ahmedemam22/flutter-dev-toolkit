@@ -74,13 +74,13 @@ fbapk() {
 }
 
 # Usage:
-#   fbipa                                   → release IPA with lib/main_gcp.dart
+#   fbipa                                   → release IPA with lib/main.dart
 #   fbipa lib/main_staging.dart             → custom entrypoint
-#   fbipa lib/main_gcp.dart --no-codesign   → pass-through extra flags
+#   fbipa lib/main.dart --no-codesign   → pass-through extra flags
 fbipa() {
   _fl_guard || return 1
   local FL; FL="$(_fl_bin)"
-  local entry="${1:-lib/main_gcp.dart}"
+  local entry="${1:-lib/main.dart}"
   [[ -n "$1" ]] && shift
   _fl_step "flutter clean"            eval "$FL clean"            || return 1
   _fl_step "flutter pub get"          eval "$FL pub get"          || return 1
@@ -216,7 +216,7 @@ Flutter helpers:
 Build pipelines (clean → pub get → build):
   fbapk [flags]                     debug/release APK
   fbaab [flags]                     release App Bundle (Play Store)
-  fbipa [entrypoint] [flags]        release IPA (default: lib/main_gcp.dart)
+  fbipa [entrypoint] [flags]        release IPA (default: lib/main.dart)
 
 Code generation (freezed, json, injectable, etc.):
   fbr              build_runner build --delete-conflicting-outputs

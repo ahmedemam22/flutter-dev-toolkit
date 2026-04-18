@@ -62,7 +62,7 @@ cmd_aab() {
 }
 
 cmd_ipa() {
-  local entry="${1:-lib/main_gcp.dart}"
+  local entry="${1:-lib/main.dart}"
   [[ $# -gt 0 ]] && shift || true
   step "flutter clean"   $FLUTTER clean
   step "flutter pub get" $FLUTTER pub get
@@ -117,7 +117,7 @@ Commands:
   apk [flags]                    Clean + pub get + build APK
   aab [flags]                    Clean + pub get + build App Bundle (release)
   ipa [entrypoint] [flags]       Clean + pub get + pod install + build IPA (release)
-                                 Default entrypoint: lib/main_gcp.dart
+                                 Default entrypoint: lib/main.dart
   refresh                        Clean + pub get
   gen                            pub get + build_runner build --delete-conflicting-outputs
   watch                          build_runner watch --delete-conflicting-outputs
