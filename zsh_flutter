@@ -1,0 +1,235 @@
+# ~/.zsh_flutter — Flutter workflow helpers for macOS
+# Source this from ~/.zshrc. Reload after edits with `rflutter`.
+#
+# Install:
+#   cp zsh_flutter ~/.zsh_flutter
+#   echo '[[ -f "$HOME/.zsh_flutter" ]] && source "$HOME/.zsh_flutter"' >> ~/.zshrc
+#   source ~/.zshrc
+
+# ---------- internal helpers ----------
+_fl_color() { printf '\033[%sm' "$1"; }
+_fl_log()   { printf "$(_fl_color '1;34')[flutter]$(_fl_color 0) %s\n" "$*"; }
+_fl_ok()    { printf "$(_fl_color '1;32')[  ok  ]$(_fl_color 0) %s\n" "$*"; }
+_fl_warn()  { printf "$(_fl_color '1;33')[ warn ]$(_fl_color 0) %s\n" "$*"; }
+_fl_err()   { printf "$(_fl_color '1;31')[ fail ]$(_fl_color 0) %s\n" "$*" >&2; }
+
+# Ensure we're inside a Flutter project (walks up looking for pubspec.yaml)
+_fl_guard() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    [[ -f "$dir/pubspec.yaml" ]] && return 0
+    dir="${dir:h}"
+  done
+  _fl_err "Not inside a Flutter project (no pubspec.yaml found)."
+  return 1
+}
+
+# Run a step, print timing, bail on failure
+_fl_step() {
+  local label="$1"; shift
+  _fl_log "▶ $label"
+  local start=$SECONDS
+  if "$@"; then
+    _fl_ok "$label  ($((SECONDS - start))s)"
+  else
+    local code=$?
+    _fl_err "$label failed (exit $code)"
+    return $code
+  fi
+}
+
+# Pick `fvm flutter` if the project has .fvm/, else plain `flutter`
+_fl_bin() {
+  if [[ -d ".fvm" ]] && command -v fvm >/dev/null 2>&1; then
+    echo "fvm flutter"
+  else
+    echo "flutter"
+  fi
+}
+
+# ---------- single-step aliases ----------
+alias fc='flutter clean'
+alias fpg='flutter pub get'
+alias fpu='flutter pub upgrade'
+alias fpo='flutter pub outdated'
+alias fdo='flutter doctor -v'
+alias fr='flutter run'
+alias frr='flutter run --release'
+alias fa='flutter analyze'
+alias ft='flutter test'
+alias fdev='flutter devices'
+
+# ---------- compound builds ----------
+# Usage:
+#   fbapk                       → debug APK, default entrypoint
+#   fbapk --release             → release APK
+#   fbapk --flavor prod -t lib/main_prod.dart
+fbapk() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_step "flutter clean"    eval "$FL clean"    || return 1
+  _fl_step "flutter pub get"  eval "$FL pub get"  || return 1
+  _fl_step "flutter build apk $*" eval "$FL build apk $*" || return 1
+  _fl_ok "APK pipeline complete → build/app/outputs/flutter-apk/"
+}
+
+# Usage:
+#   fbipa                                   → release IPA with lib/main.dart
+#   fbipa lib/main_staging.dart             → custom entrypoint
+#   fbipa lib/main.dart --no-codesign   → pass-through extra flags
+fbipa() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  local entry="${1:-lib/main.dart}"
+  [[ -n "$1" ]] && shift
+  _fl_step "flutter clean"            eval "$FL clean"            || return 1
+  _fl_step "flutter pub get"          eval "$FL pub get"          || return 1
+  if [[ -d "ios" ]]; then
+    _fl_step "rm ios/.symlinks + ios/Pods" \
+      rm -rf ios/.symlinks ios/Pods || return 1
+    _fl_step "pod install --repo-update" \
+      sh -c "cd ios && pod install --repo-update" || return 1
+  fi
+  _fl_step "flutter build ipa --release -t $entry $*" \
+    eval "$FL build ipa --release -t $entry $*" || return 1
+  _fl_ok "IPA pipeline complete → build/ios/ipa/"
+}
+
+# Build App Bundle (Play Store)
+# Usage: fbaab [--flavor prod] [-t lib/main_prod.dart]
+fbaab() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_step "flutter clean"    eval "$FL clean"    || return 1
+  _fl_step "flutter pub get"  eval "$FL pub get"  || return 1
+  _fl_step "flutter build appbundle --release $*" \
+    eval "$FL build appbundle --release $*" || return 1
+  _fl_ok "AAB pipeline complete → build/app/outputs/bundle/"
+}
+
+# Quick dev reset without a build
+frefresh() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_step "flutter clean"   eval "$FL clean"   || return 1
+  _fl_step "flutter pub get" eval "$FL pub get" || return 1
+  _fl_ok "Project refreshed"
+}
+
+# Short alias: clean + pub get
+alias fcp='frefresh'
+
+# ---------- build_runner (code generation: freezed, json, injectable, etc.) ----------
+# Usage:
+#   fbr            → dart run build_runner build --delete-conflicting-outputs
+#   fbrw           → watch mode (auto-rebuild on file changes)
+#   fbrc           → dart run build_runner clean
+#   fgen           → pub get + build_runner build (use after changing deps or models)
+fbr() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  # Use `<flutter> pub run` for fvm-aware invocation; falls back to `dart run` cleanly
+  _fl_step "build_runner build --delete-conflicting-outputs" \
+    eval "$FL pub run build_runner build --delete-conflicting-outputs $*" || return 1
+  _fl_ok "Code generation complete"
+}
+
+fbrw() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_log "▶ build_runner watch (Ctrl+C to stop)"
+  eval "$FL pub run build_runner watch --delete-conflicting-outputs $*"
+}
+
+fbrc() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_step "build_runner clean" eval "$FL pub run build_runner clean" || return 1
+  _fl_ok "build_runner cache cleared"
+}
+
+# Full regen: pub get → build_runner build. Use when you pulled new models/deps.
+fgen() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_step "flutter pub get" eval "$FL pub get" || return 1
+  _fl_step "build_runner build --delete-conflicting-outputs" \
+    eval "$FL pub run build_runner build --delete-conflicting-outputs $*" || return 1
+  _fl_ok "Regen complete"
+}
+
+# Hard reset — nukes caches, DerivedData, and Pods. Use when builds are flaky.
+fnuke() {
+  _fl_guard || return 1
+  local FL; FL="$(_fl_bin)"
+  _fl_warn "Nuking caches: ios/Pods, Podfile.lock, build/, ~/Library/Developer/Xcode/DerivedData"
+  _fl_step "flutter clean"              eval "$FL clean"                          || return 1
+  _fl_step "rm build dir"               rm -rf build                              || return 1
+  if [[ -d "ios" ]]; then
+    _fl_step "rm ios/Pods + Podfile.lock" rm -rf ios/Pods ios/Podfile.lock        || return 1
+  fi
+  _fl_step "rm DerivedData"             rm -rf "$HOME/Library/Developer/Xcode/DerivedData" || return 1
+  _fl_step "flutter pub get"            eval "$FL pub get"                        || return 1
+  if [[ -d "ios" ]]; then
+    _fl_step "pod install"              sh -c "cd ios && pod install --repo-update" || return 1
+  fi
+  _fl_ok "Nuke complete. Try your build again."
+}
+
+# Open build artifacts in Finder
+# Usage: fopen apk | ipa | aab
+fopen() {
+  case "$1" in
+    apk) open build/app/outputs/flutter-apk/ ;;
+    ipa) open build/ios/ipa/ ;;
+    aab) open build/app/outputs/bundle/ ;;
+    *)   _fl_err "usage: fopen apk|ipa|aab" ;;
+  esac
+}
+
+# Print environment info for bug reports
+finfo() {
+  _fl_log "which flutter: $(command -v flutter || echo 'not found')"
+  _fl_log "flutter --version:"
+  flutter --version 2>/dev/null || _fl_err "flutter not on PATH"
+  _fl_log "xcode-select: $(xcode-select -p 2>/dev/null || echo 'not installed')"
+  _fl_log "pod: $(command -v pod || echo 'not found')"
+}
+
+# Reload this file after edits
+alias rflutter='source ~/.zsh_flutter && _fl_ok "flutter helpers reloaded"'
+
+# Show all helpers
+fhelp() {
+  cat <<'EOF'
+Flutter helpers:
+  fc         flutter clean
+  fpg        flutter pub get
+  fpu        flutter pub upgrade
+  fpo        flutter pub outdated
+  fa         flutter analyze
+  ft         flutter test
+  fr / frr   flutter run / --release
+  fdo        flutter doctor -v
+  fdev       flutter devices
+
+Build pipelines (clean → pub get → build):
+  fbapk [flags]                     debug/release APK
+  fbaab [flags]                     release App Bundle (Play Store)
+  fbipa [entrypoint] [flags]        release IPA (default: lib/main.dart)
+
+Code generation (freezed, json, injectable, etc.):
+  fbr              build_runner build --delete-conflicting-outputs
+  fbrw             build_runner watch  (auto-rebuild, Ctrl+C to stop)
+  fbrc             build_runner clean
+  fgen             pub get + build_runner build
+
+Utilities:
+  fcp / frefresh   clean + pub get
+  fnuke            wipe Pods, DerivedData, build/ and reinstall
+  fopen apk|ipa|aab  open artifact folder in Finder
+  finfo            environment sanity check
+  rflutter         reload this config
+  fhelp            show this
+EOF
+}
